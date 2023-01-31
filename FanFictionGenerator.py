@@ -8,7 +8,7 @@ class FanFictionGenerator:
     def __init__(self):
         langchain.llm_cache = SQLiteCache(".langchain.db")
 
-        self.llm = OpenAI(max_tokens=-1)
+        self.llm = OpenAI(max_tokens=-1, temperature=0.7)
         self.initialPlotGenerator = LLMChain.from_string(
             self.llm, "Write a detailed Story for an new Episode of {seriesname}"
         )
@@ -57,16 +57,14 @@ Now Rewrite the Story with the new Details from the Solution.
 New Version:""",
         )
 
-    def generate(self, seriesname):
-        print("Generating a new FanFiction")
 
+    def generateInitial(self, seriesname, UseCache=True):
+        print("Generating a new FanFiction")
+        self.llm.cache=UseCache
         plot = self.initialPlotGenerator.predict(seriesname=seriesname)
         print("Generated Plot: " + plot)
         
-        nextVersion = self.improve(seriesname, plot)
-
-        print("Generated Next Version: " + nextVersion)
-        return nextVersion
+        return plot
 
     def improve(self, seriesname, plot):
         problems = self.problemGenerator.predict(
