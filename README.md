@@ -5,7 +5,7 @@ Just provide the series name and this Code will spit out a refined new plot for 
 
 Use
 
-´´´
+```
 from FanFictionGenerator import FanFictionGenerator
 
 generator = FanFictionGenerator()
@@ -18,7 +18,7 @@ for i in range(0, 3):
     story = generator.improve(seriesName, story)
 
 print("Final Story: " + story)
-´´´
+```
 
 Examples:
 
