@@ -4,13 +4,47 @@ from langchain.cache import SQLiteCache
 import langchain
 
 
+class InitialPlotGenerator:
+    def __init__(self):
+        langchain.llm_cache = SQLiteCache(".langchain.db")
+
+        self.llm = OpenAI(max_tokens=-1, temperature=0.7)
+        self.TenNewPlots = LLMChain.from_string(
+            self.llm, """Generate 10 plots for new episods of {seriesname}. Two or three sentences long.
+
+1."""
+        )
+
+        self.CompatiblePlotCombination = LLMChain.from_string(self.llm, """We have a pool of pots for new episods for {seriesname}.
+Plotpool:
+{plotpool}
+
+Create one new more entertaining plot by combining two plots from the pool, where they would fit together.
+1.""")
+        
+    def generateInitialPlot(self, seriesname, UseCache=True):
+        print("Generating initial Plot")
+        self.llm.cache = UseCache
+        plots = self.TenNewPlots.predict(seriesname=seriesname)
+        print("Generated Plots: " + plots)
+        
+        compatibleCombination = self.CompatiblePlotCombination.predict(seriesname=seriesname, plotpool=plots)
+        print("Compatible Combinations: " + compatibleCombination)
+
+        return compatibleCombination
+
+
 class FanFictionGenerator:
     def __init__(self):
         langchain.llm_cache = SQLiteCache(".langchain.db")
 
         self.llm = OpenAI(max_tokens=-1, temperature=0.7)
-        self.initialPlotGenerator = LLMChain.from_string(
-            self.llm, "Write a detailed Story for an new Episode of {seriesname}"
+        self.initialStoryGenerator = LLMChain.from_string(
+            self.llm, """Write a detailed Story for an new Episode of {seriesname}.
+            The Plot is:
+            {plot}
+            
+            Detailed Story:"""
         )
 
         self.problemGenerator = LLMChain.from_string(
@@ -18,7 +52,7 @@ class FanFictionGenerator:
             """Between >>> and <<< is a new Story for {seriesname}
 
 >>>
-{plot}
+{story}
 <<<
 
 Where is the story unclear, where is not detailed enough?
@@ -30,7 +64,7 @@ Missing Details:""",
             self.llm,
             """Between >>> and <<< is a new Story for {seriesname}
 >>>
-{plot}
+{story}
 <<<
 It has the following problems:
 {problems}
@@ -44,7 +78,7 @@ Improvments:""",
             self.llm,
             """Between >>> and <<< is a new Story for {seriesname}.
 >>>
-{plot}
+{story}
 <<< 
 The Critics found the following problems:
 {problems}
@@ -57,68 +91,44 @@ Now Rewrite the Story with the new Details from the Solution.
 New Version:""",
         )
 
-        self.StoryMerger = LLMChain.from_string(self.llm, """Two stories for {seriesname} have to be merged.
-Story 1:{plot1}
 
-Story 2:{plot2}
-
-Your task is it to merge this two stories into one more exciting story.
-
-Merged Story:""")
-
-    def merge(self, seriesname, plot1, plot2):
-        print("Merging two Stories")
-        merged = self.StoryMerger.predict(
-            seriesname=seriesname, plot1=plot1, plot2=plot2)
-        print("Merged Plot: " + merged)
-        return merged
-
-    def generateInitial(self, seriesname, UseCache=True):
+    def generateInitialStory(self, seriesname, UseCache=True):
         print("Generating a new FanFiction")
         self.llm.cache = UseCache
-        plot = self.initialPlotGenerator.predict(seriesname=seriesname)
-        print("Generated Plot: " + plot)
-        
-        return plot
+        initialPlotGenerator = InitialPlotGenerator()
+        plot = initialPlotGenerator.generateInitialPlot(seriesname, UseCache)
 
-    def improve(self, seriesname, plot, count=1):
+        story = self.initialStoryGenerator.predict(
+            seriesname=seriesname, plot=plot)
+        print("Generated initial Story: " + story)
+        
+        return story
+
+    def improve(self, seriesname, story, count=1):
 
         for i in range(count):
             problems = self.problemGenerator.predict(
-                plot=plot,
+                story=story,
                 seriesname=seriesname)
             print("Generated Problems:" + problems)
 
             solution = self.ProblemFixer.predict(
-                plot=plot, seriesname=seriesname, problems=problems
+                story=story, seriesname=seriesname, problems=problems
             )
             print("Generated Solution: " + solution)
 
-            plot = self.NextVersion.predict(
-                plot=plot, problems=problems,
+            story = self.NextVersion.predict(
+                story=story, problems=problems,
                 solution=solution,
                 seriesname=seriesname
             )
-        return plot
+        return story
 
     def MultiGenerate(
             self, seriesname,
-            improvementSteps=3,
-            storyCount=2,
-            finalImprovementSteps=3):
-        plots = []
-        for i in range(storyCount):
-            plot = self.generateInitial(seriesname, False)
-            plot = self.improve(seriesname, plot, improvementSteps)
-            print("Generated Plot" + str(i) + ": " + plot)
-            plots.append(plot)
+            improvementSteps=3,):
+        story = self.generateInitialStory(seriesname, True)
+        story = self.improve(seriesname, story, improvementSteps)
+        print("Generated Story:" + story)
         
-        mergedPlot = plots[0]
-        for i in range(1, len(plots)):
-            mergedPlot = self.merge(seriesname, mergedPlot, plots[i])
-
-        # finalImprovement
-        mergedPlot = self.improve(
-            seriesname, mergedPlot, finalImprovementSteps)
-        
-        return mergedPlot
+        return story
